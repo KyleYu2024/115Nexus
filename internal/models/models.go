@@ -144,6 +144,12 @@ type ResourceSession struct {
 	Time  time.Time
 }
 
+type PansouSession struct {
+	Keyword string
+	Items   []PansouItem
+	Time    time.Time
+}
+
 type BatchOfflineRequest struct {
 	Urls   string `json:"urls"`
 	Folder string `json:"folder"`
@@ -155,6 +161,7 @@ var (
 	ConfigMutex   sync.RWMutex
 	SearchCache   sync.Map
 	ResourceCache sync.Map
+	PansouCache   sync.Map
 	WebUser       string
 	WebPassword   string
 )

@@ -42,7 +42,10 @@ func handleMsg(bot *tgbotapi.BotAPI, m *tgbotapi.Message) {
 		msg := tgbotapi.NewMessage(m.Chat.ID, "👋 *欢迎使用 115Media-Bot v2.0.4*\n\n• `/s <片名>` \\- 搜索影视\n• `/ps <关键词>` \\- Pansou 搜索\n\n💡 直接发送 115 链接或磁力链可一键推送。")
 		msg.ParseMode = "MarkdownV2"; bot.Send(msg); return
 	}
-	if strings.HasPrefix(txt, "/s") {
+	if strings.HasPrefix(txt, "/ps") {
+		kw := strings.TrimSpace(strings.TrimPrefix(txt, "/ps"))
+		if kw != "" { doPansouSearch(bot, m.Chat.ID, kw) }
+	} else if strings.HasPrefix(txt, "/s") {
 		kw := strings.TrimSpace(strings.TrimPrefix(txt, "/s"))
 		if kw != "" { doSearch(bot, m.Chat.ID, kw) }
 	} else if l := utils.Extract115Link(txt); l != "" {
@@ -54,15 +57,75 @@ func doSearch(bot *tgbotapi.BotAPI, cid int64, kw string) {
 	cfg := models.GlobalConfig
 	var res []models.MovieMetadata
 	tUrl := fmt.Sprintf("https://api.themoviedb.org/3/search/multi?api_key=%s&language=zh-CN&query=%s", cfg.TmdbApiKey, url.QueryEscape(kw))
+	slog.Info("🔍 TMDB Request URL", "url", tUrl)
 	resp, err := utils.GetProxyClient(cfg).Get(tUrl)
 	if err == nil {
 		defer resp.Body.Close()
 		var w models.TmdbSearchResponse; json.NewDecoder(resp.Body).Decode(&w); res = w.Results
+	} else {
+		slog.Error("❌ TMDB Search Error", "err", err)
+		bot.Send(tgbotapi.NewMessage(cid, "❌ 搜索请求失败，请检查网络或代理"))
+		return
 	}
 	if len(res) == 0 { bot.Send(tgbotapi.NewMessage(cid, "❌ No results")); return }
 	sid := fmt.Sprintf("s_%d", time.Now().UnixNano())
 	models.SearchCache.Store(sid, models.SearchSession{Keyword: kw, Items: res, Time: time.Now()})
 	sendSearchPage(bot, cid, sid, 1, false, 0)
+}
+
+func doPansouSearch(bot *tgbotapi.BotAPI, cid int64, kw string) {
+	cfg := models.GlobalConfig
+	items, err := services.DoPansouSearch(kw, cfg)
+	if err != nil {
+		slog.Error("❌ Pansou Search Error", "err", err)
+		bot.Send(tgbotapi.NewMessage(cid, "❌ Pansou 搜索失败，请检查配置"))
+		return
+	}
+	if len(items) == 0 {
+		bot.Send(tgbotapi.NewMessage(cid, "📭 Pansou 搜索无结果"))
+		return
+	}
+
+	sid := fmt.Sprintf("ps_%d", time.Now().UnixNano())
+	models.PansouCache.Store(sid, models.PansouSession{Keyword: kw, Items: items, Time: time.Now()})
+	sendPansouPage(bot, cid, sid, 1, false, 0)
+}
+
+func sendPansouPage(bot *tgbotapi.BotAPI, cid int64, sid string, page int, edit bool, mid int) {
+	v, ok := models.PansouCache.Load(sid); if !ok { return }
+	sess := v.(models.PansouSession); ps := 5; start := (page-1)*ps; end := start+ps
+	if end > len(sess.Items) { end = len(sess.Items) }
+	
+	var txtBuilder strings.Builder
+	txtBuilder.WriteString(fmt.Sprintf("🔍 *Pansou: %s* (P%d)\n\n", utils.TgEscape(sess.Keyword), page))
+
+	var kb [][]tgbotapi.InlineKeyboardButton
+	var currentRow []tgbotapi.InlineKeyboardButton
+
+	for i := start; i < end; i++ {
+		item := sess.Items[i]
+		idx := i - start + 1
+		txtBuilder.WriteString(fmt.Sprintf("*%d\\.* %s\n\n", idx, utils.TgEscape(item.Note)))
+		
+		btnLabel := fmt.Sprintf("📥 存 %d", idx)
+		currentRow = append(currentRow, tgbotapi.NewInlineKeyboardButtonData(btnLabel, fmt.Sprintf("p|%s", item.Url)))
+		if len(currentRow) == 2 {
+			kb = append(kb, currentRow)
+			currentRow = nil
+		}
+	}
+	if len(currentRow) > 0 { kb = append(kb, currentRow) }
+
+	var nav []tgbotapi.InlineKeyboardButton
+	if page > 1 { nav = append(nav, tgbotapi.NewInlineKeyboardButtonData("⬅️", fmt.Sprintf("psp|%s|%d", sid, page-1))) }
+	if end < len(sess.Items) { nav = append(nav, tgbotapi.NewInlineKeyboardButtonData("➡️", fmt.Sprintf("psp|%s|%d", sid, page+1))) }
+	if len(nav) > 0 { kb = append(kb, nav) }
+
+	if edit {
+		m := tgbotapi.NewEditMessageText(cid, mid, txtBuilder.String()); m.ParseMode="MarkdownV2"; m.ReplyMarkup=&tgbotapi.InlineKeyboardMarkup{InlineKeyboard: kb}; bot.Send(m)
+	} else {
+		m := tgbotapi.NewMessage(cid, txtBuilder.String()); m.ParseMode="MarkdownV2"; m.ReplyMarkup=tgbotapi.InlineKeyboardMarkup{InlineKeyboard: kb}; bot.Send(m)
+	}
 }
 
 func sendSearchPage(bot *tgbotapi.BotAPI, cid int64, sid string, page int, edit bool, mid int) {
@@ -103,6 +166,8 @@ func handleCB(bot *tgbotapi.BotAPI, q *tgbotapi.CallbackQuery) {
 		p := strings.Split(data, "|"); pg, _ := strconv.Atoi(p[2]); sendSearchPage(bot, cid, p[1], pg, true, q.Message.MessageID)
 	} else if strings.HasPrefix(data, "rp|") {
 		p := strings.Split(data, "|"); pg, _ := strconv.Atoi(p[2]); sendResPage(bot, cid, p[1], pg, true, q.Message.MessageID, p[3])
+	} else if strings.HasPrefix(data, "psp|") {
+		p := strings.Split(data, "|"); pg, _ := strconv.Atoi(p[2]); sendPansouPage(bot, cid, p[1], pg, true, q.Message.MessageID)
 	} else if strings.HasPrefix(data, "back|") {
 		p := strings.Split(data, "|"); sendSearchPage(bot, cid, p[1], 1, true, q.Message.MessageID)
 	}

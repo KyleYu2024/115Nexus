@@ -64,12 +64,15 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	var res []models.MovieMetadata
 	if cfg.TmdbApiKey != "" {
 		target := fmt.Sprintf("https://api.themoviedb.org/3/search/multi?api_key=%s&language=zh-CN&query=%s", cfg.TmdbApiKey, url.QueryEscape(q))
+		slog.Info("🔍 Web API TMDB Request", "url", target)
 		resp, err := utils.GetProxyClient(cfg).Get(target)
 		if err == nil {
 			defer resp.Body.Close()
 			var wrapper models.TmdbSearchResponse
 			json.NewDecoder(resp.Body).Decode(&wrapper)
 			res = wrapper.Results
+		} else {
+			slog.Error("❌ Web API TMDB Request Error", "err", err)
 		}
 	}
 	json.NewEncoder(w).Encode(map[string]interface{}{"results": res})
