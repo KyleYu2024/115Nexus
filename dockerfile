@@ -20,13 +20,13 @@ COPY . .
 ARG TARGETOS
 ARG TARGETARCH
 
-# 编译阶段：显式指定目标操作系统和架构
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o main .
+# 编译阶段：显式指定目标操作系统和架构（默认 linux/amd64）
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -o main .
 
 # ============================
 # 第二阶段：运行 (Runner)
 # ============================
-FROM alpine:latest
+FROM --platform=linux/amd64 alpine:latest
 
 # 安装基础证书和时区数据
 RUN apk --no-cache add ca-certificates tzdata
