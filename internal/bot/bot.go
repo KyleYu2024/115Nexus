@@ -39,7 +39,7 @@ func Start(token string) {
 func handleMsg(bot *tgbotapi.BotAPI, m *tgbotapi.Message) {
 	txt := strings.TrimSpace(m.Text); cfg := models.GlobalConfig
 	if strings.HasPrefix(txt, "/start") || strings.HasPrefix(txt, "/help") {
-		msg := tgbotapi.NewMessage(m.Chat.ID, "👋 *欢迎使用 115Media-Bot v2.0.4*\n\n• `/s <片名>` \\- 搜索影视\n• `/ps <关键词>` \\- Pansou 搜索\n\n💡 直接发送 115 链接或磁力链可一键推送。")
+		msg := tgbotapi.NewMessage(m.Chat.ID, "👋 *欢迎使用 115Media\\-Bot v0\\.2\\.3*\n\n• `/s 关键词` \\- 搜索影视\n• `/ps 关键词` \\- Pansou 搜索\n\n💡 直接发送 115 链接或磁力链可一键推送。")
 		msg.ParseMode = "MarkdownV2"; bot.Send(msg); return
 	}
 	if strings.HasPrefix(txt, "/ps") {
@@ -97,7 +97,7 @@ func sendPansouPage(bot *tgbotapi.BotAPI, cid int64, sid string, page int, edit 
 	if end > len(sess.Items) { end = len(sess.Items) }
 	
 	var txtBuilder strings.Builder
-	txtBuilder.WriteString(fmt.Sprintf("🔍 *Pansou: %s* (P%d)\n\n", utils.TgEscape(sess.Keyword), page))
+	txtBuilder.WriteString(fmt.Sprintf("🔍 *Pansou: %s* \\(P%d\\)\n\n", utils.TgEscape(sess.Keyword), page))
 
 	var kb [][]tgbotapi.InlineKeyboardButton
 	var currentRow []tgbotapi.InlineKeyboardButton
@@ -132,7 +132,7 @@ func sendSearchPage(bot *tgbotapi.BotAPI, cid int64, sid string, page int, edit 
 	v, ok := models.SearchCache.Load(sid); if !ok { return }
 	sess := v.(models.SearchSession); ps := 5; start := (page-1)*ps; end := start+ps
 	if end > len(sess.Items) { end = len(sess.Items) }
-	txt := fmt.Sprintf("🎬 *Search: %s* (P%d)\n", utils.TgEscape(sess.Keyword), page)
+	txt := fmt.Sprintf("🎬 *Search: %s* \\(P%d\\)\n", utils.TgEscape(sess.Keyword), page)
 	var kb [][]tgbotapi.InlineKeyboardButton
 	for i := start; i < end; i++ {
 		item := sess.Items[i]; t := item.Title; if t == "" { t = item.Name }
@@ -182,7 +182,7 @@ func sendResPage(bot *tgbotapi.BotAPI, cid int64, rsid string, page int, edit bo
 	if end > len(sess.Items) { end = len(sess.Items) }
 	
 	var txtBuilder strings.Builder
-	txtBuilder.WriteString(fmt.Sprintf("📦 *资源列表* (第 %d 页)\n\n", page))
+	txtBuilder.WriteString(fmt.Sprintf("📦 *资源列表* \\(第 %d 页\\)\n\n", page))
 
 	var kb [][]tgbotapi.InlineKeyboardButton
 	var currentRow []tgbotapi.InlineKeyboardButton
