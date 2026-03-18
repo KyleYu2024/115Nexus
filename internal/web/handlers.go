@@ -20,7 +20,7 @@ var OnConfigSave func()
 
 func HandleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	html := strings.Replace(htmlPage, "{{VERSION}}", "v0.2.2", 1)
+	html := strings.Replace(htmlPage, "{{VERSION}}", "v0.2.3", 1)
 	fmt.Fprint(w, html)
 }
 
