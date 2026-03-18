@@ -18,7 +18,7 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-const AppVersion = "v0.2.0"
+const AppVersion = "v0.2.2"
 
 var globalCron *cron.Cron
 

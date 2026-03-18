@@ -133,20 +133,26 @@ func FetchHdhiveResources(id string, mType string, cfg models.BotConfig) ([]mode
 		avgMB := totalMB / float64(count)
 		tags := utils.UniqueTags(append(hr.VideoResolution, hr.Source...))
 		
-		disp := fmt.Sprintf("[HDHive] [%.1fG] %s", totalMB/1024, hr.Title)
-		if count > 1 { disp = fmt.Sprintf("[HDHive][均%.1fG | 总%.1fG] %s", avgMB/1024, totalMB/1024, hr.Title) }
-		
-		// 🌟 新增：Remark 智能集成
-		if hr.Remark != "" {
-			remarkRunes := []rune(hr.Remark)
-			if len(remarkRunes) > 30 {
-				disp = fmt.Sprintf("%s | 📝 %s...", disp, string(remarkRunes[:28]))
-			} else {
-				disp = fmt.Sprintf("%s | 📝 %s", disp, hr.Remark)
-			}
+		// 🌟 排版优化：完整保留多行文本
+		officialTag := ""
+		if hr.IsOfficial { officialTag = "[官组] " }
+
+		disp := fmt.Sprintf("💽 %s%s\n └ 📦 大小: %.1fGB", officialTag, hr.Title, totalMB/1024)
+		if count > 1 { 
+			disp = fmt.Sprintf("💽 %s%s\n └ 📦 大小: %.1fGB (均%.1fGB)", officialTag, hr.Title, totalMB/1024, avgMB/1024) 
 		}
 
-		if hr.UnlockPoints > 0 && !hr.IsUnlocked { disp = fmt.Sprintf("💎 %dpt | %s", hr.UnlockPoints, disp) }
+		if hr.Remark != "" {
+			disp = fmt.Sprintf("%s\n └ 📝 备注: %s", disp, hr.Remark)
+		}
+
+		if hr.User.Nickname != "" {
+			disp = fmt.Sprintf("%s\n └ 👤 发布: @%s", disp, hr.User.Nickname)
+		}
+
+		if hr.UnlockPoints > 0 && !hr.IsUnlocked {
+			disp = fmt.Sprintf("%s\n └ 💎 需 %d pt 解锁", disp, hr.UnlockPoints)
+		}
 		
 		res := models.ProcessedResource{Title: hr.Title, Link: "hdhive://" + hr.Slug, TotalMB: totalMB, AvgMB: avgMB, Display: disp, Tags: tags, HdhivePoints: hr.UnlockPoints}
 		if hr.IsUnlocked { res.HdhivePoints = 0 }
@@ -191,8 +197,6 @@ func UnlockHdhive(slug string, cfg models.BotConfig) (string, error) {
 	res := d.FullUrl; if res == "" { res = d.Url }
 	return res, nil
 }
-
-// === Media302 & Pansou ===
 
 func DoPansouSearch(kw string, cfg models.BotConfig) ([]models.PansouItem, error) {
 	if cfg.PansouUrl == "" { return nil, nil }
@@ -245,7 +249,6 @@ func PushToMedia302(link string, cfg models.BotConfig) string {
 	if err != nil { return "❌ 请求失败" }
 	defer resp.Body.Close()
 	
-	// 🌟 深度诊断：读取 Media302 的反馈
 	body, _ := ioutil.ReadAll(resp.Body)
 	bodyStr := string(body)
 	slog.Info("📥 Media302 响应反馈", "status", resp.StatusCode, "body", bodyStr)

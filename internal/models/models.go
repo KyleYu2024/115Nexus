@@ -75,7 +75,11 @@ type HdhiveResource struct {
 	Title            string   `json:"title"`
 	PanType          string   `json:"pan_type"`
 	ShareSize        string   `json:"share_size"`
-	Remark           string   `json:"remark"` // 🌟 新增：捕获备注
+	Remark           string   `json:"remark"`
+	IsOfficial       bool     `json:"is_official"` // 🌟 新增：官组标识
+	User             struct {
+		Nickname string `json:"nickname"`
+	} `json:"user"` // 🌟 新增：发布者信息
 	DiskTypes        []string `json:"disk_types"`
 	CloudTypes       []string `json:"cloud_types"`
 	VideoResolution  []string `json:"video_resolution"`

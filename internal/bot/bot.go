@@ -110,19 +110,55 @@ func handleCB(bot *tgbotapi.BotAPI, q *tgbotapi.CallbackQuery) {
 
 func sendResPage(bot *tgbotapi.BotAPI, cid int64, rsid string, page int, edit bool, mid int, ssid string) {
 	v, ok := models.ResourceCache.Load(rsid); if !ok { return }
-	sess := v.(models.ResourceSession); ps := 6; start := (page-1)*ps; end := start+ps
+	sess := v.(models.ResourceSession)
+	ps := 5 // 每页显示5条，因为文本变长了
+	start := (page-1)*ps
+	end := start+ps
 	if end > len(sess.Items) { end = len(sess.Items) }
-	txt := fmt.Sprintf("📦 *Resources* (P%d)\n", page)
+	
+	var txtBuilder strings.Builder
+	txtBuilder.WriteString(fmt.Sprintf("📦 *资源列表* (第 %d 页)\n\n", page))
+
 	var kb [][]tgbotapi.InlineKeyboardButton
+	var currentRow []tgbotapi.InlineKeyboardButton
+
 	for i := start; i < end; i++ {
-		item := sess.Items[i]; label := item.Display
-		if item.HdhivePoints > 0 { label = fmt.Sprintf("💎 %dpt | %s", item.HdhivePoints, label) }
-		kb = append(kb, []tgbotapi.InlineKeyboardButton{tgbotapi.NewInlineKeyboardButtonData(label, fmt.Sprintf("p|%s", item.Link))})
+		item := sess.Items[i]
+		idx := i - start + 1
+		
+		// 拼接正文
+		txtBuilder.WriteString(fmt.Sprintf("*%d\\.* %s\n\n", idx, utils.TgEscape(item.Display)))
+		
+		// 拼接按钮
+		btnLabel := fmt.Sprintf("📥 存 %d", idx)
+		if item.HdhivePoints > 0 { 
+			btnLabel = fmt.Sprintf("💎 %dpt | 存 %d", item.HdhivePoints, idx) 
+		}
+		
+		currentRow = append(currentRow, tgbotapi.NewInlineKeyboardButtonData(btnLabel, fmt.Sprintf("p|%s", item.Link)))
+		if len(currentRow) == 2 {
+			kb = append(kb, currentRow)
+			currentRow = nil
+		}
 	}
+	if len(currentRow) > 0 { kb = append(kb, currentRow) }
+
 	var nav []tgbotapi.InlineKeyboardButton
 	if page > 1 { nav = append(nav, tgbotapi.NewInlineKeyboardButtonData("⬅️", fmt.Sprintf("rp|%s|%d|%s", rsid, page-1, ssid))) }
-	if ssid != "" { nav = append(nav, tgbotapi.NewInlineKeyboardButtonData("🔙 Back", fmt.Sprintf("back|%s", ssid))) }
+	if ssid != "" { nav = append(nav, tgbotapi.NewInlineKeyboardButtonData("🔙 返回", fmt.Sprintf("back|%s", ssid))) }
 	if end < len(sess.Items) { nav = append(nav, tgbotapi.NewInlineKeyboardButtonData("➡️", fmt.Sprintf("rp|%s|%d|%s", rsid, page+1, ssid))) }
 	if len(nav) > 0 { kb = append(kb, nav) }
-	m := tgbotapi.NewEditMessageText(cid, mid, txt); m.ParseMode="MarkdownV2"; m.ReplyMarkup=&tgbotapi.InlineKeyboardMarkup{InlineKeyboard: kb}; bot.Send(m)
+	
+	m := tgbotapi.NewEditMessageText(cid, mid, txtBuilder.String())
+	if !edit {
+		mNew := tgbotapi.NewMessage(cid, txtBuilder.String())
+		mNew.ParseMode = "MarkdownV2"
+		mNew.ReplyMarkup = tgbotapi.InlineKeyboardMarkup{InlineKeyboard: kb}
+		bot.Send(mNew)
+		return
+	}
+	
+	m.ParseMode = "MarkdownV2"
+	m.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: kb}
+	bot.Send(m)
 }
