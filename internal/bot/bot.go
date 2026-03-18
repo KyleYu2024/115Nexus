@@ -108,7 +108,7 @@ func sendPansouPage(bot *tgbotapi.BotAPI, cid int64, sid string, page int, edit 
 		txtBuilder.WriteString(fmt.Sprintf("*%d\\.* %s\n\n", idx, utils.TgEscape(item.Note)))
 		
 		btnLabel := fmt.Sprintf("📥 存 %d", idx)
-		currentRow = append(currentRow, tgbotapi.NewInlineKeyboardButtonData(btnLabel, fmt.Sprintf("p|%s", item.Url)))
+		currentRow = append(currentRow, tgbotapi.NewInlineKeyboardButtonData(btnLabel, fmt.Sprintf("pp|%s|%d", sid, i)))
 		if len(currentRow) == 2 {
 			kb = append(kb, currentRow)
 			currentRow = nil
@@ -162,6 +162,16 @@ func handleCB(bot *tgbotapi.BotAPI, q *tgbotapi.CallbackQuery) {
 		sendResPage(bot, cid, rsid, 1, true, q.Message.MessageID, p[3])
 	} else if strings.HasPrefix(data, "p|") {
 		p := strings.Split(data, "|"); bot.Send(tgbotapi.NewMessage(cid, services.PushToMedia302(p[1], cfg)))
+	} else if strings.HasPrefix(data, "pp|") {
+		p := strings.Split(data, "|")
+		if len(p) >= 3 {
+			if v, ok := models.PansouCache.Load(p[1]); ok {
+				sess := v.(models.PansouSession)
+				if idx, err := strconv.Atoi(p[2]); err == nil && idx >= 0 && idx < len(sess.Items) {
+					bot.Send(tgbotapi.NewMessage(cid, services.PushToMedia302(sess.Items[idx].Url, cfg)))
+				}
+			}
+		}
 	} else if strings.HasPrefix(data, "sp|") {
 		p := strings.Split(data, "|"); pg, _ := strconv.Atoi(p[2]); sendSearchPage(bot, cid, p[1], pg, true, q.Message.MessageID)
 	} else if strings.HasPrefix(data, "rp|") {
