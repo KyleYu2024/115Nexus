@@ -1,0 +1,14 @@
+services:
+  115nexus:
+    container_name: 115nexus
+    image: kyleyu2024/115nexus:latest
+    restart: unless-stopped
+    network_mode: host
+    # ports:
+    #   - "7833:7833" 
+    volumes:
+    - ./config:/app/config
+    environment:
+    - TZ=Asia/Shanghai
+    - WEB_USER=admin
+    - WEB_PASSWORD=password
