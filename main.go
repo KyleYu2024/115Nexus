@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -18,11 +19,12 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-const AppVersion = "v0.2.3"
+const AppVersion = "0.2.6"
 
 var globalCron *cron.Cron
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	config.InitLogging()
 	slog.Info("115Nexus 启动中", "version", AppVersion)
 
@@ -47,6 +49,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", web.HandleIndex)
 	mux.HandleFunc("/api/logo.png", web.HandleLogo)
+	mux.HandleFunc("/manifest.json", web.HandleManifest)
 	mux.HandleFunc("/api/login", web.HandleLogin)
 	mux.HandleFunc("/api/config", web.AuthMiddleware(web.HandleConfig))
 	mux.HandleFunc("/api/logs", web.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +90,14 @@ func UpdateCron() {
 	if cfg.HdhiveCheckinEnabled && cfg.HdhiveCheckinCron != "" {
 		globalCron = cron.New(cron.WithLocation(time.Local))
 		_, err := globalCron.AddFunc(cfg.HdhiveCheckinCron, func() {
-			slog.Info("⏰ Cron 定时触发签到")
+			// 随机延迟 0-30 分钟
+			delay := time.Duration(rand.Intn(31)) * time.Minute
+			slog.Info("⏰ Cron 定时触发签到", "delay", delay.String())
+			
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+			
 			services.DoHdhiveCheckin(models.GlobalConfig)
 		})
 		

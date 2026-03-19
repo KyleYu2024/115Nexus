@@ -20,13 +20,32 @@ var OnConfigSave func()
 
 func HandleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	html := strings.Replace(htmlPage, "{{VERSION}}", "v0.2.3", 1)
+	html := strings.Replace(htmlPage, "{{VERSION}}", "v0.2.4", 1)
 	fmt.Fprint(w, html)
 }
 
 func HandleLogo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/svg+xml")
 	fmt.Fprint(w, AppLogoSVG)
+}
+
+func HandleManifest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprint(w, `{
+		"name": "115Nexus",
+		"short_name": "115Nexus",
+		"start_url": "/",
+		"display": "standalone",
+		"background_color": "#ffffff",
+		"theme_color": "#007aff",
+		"icons": [
+			{
+				"src": "https://img.andp.cc/icons/upload/115Nexus.png",
+				"sizes": "512x512",
+				"type": "image/png"
+			}
+		]
+	}`)
 }
 
 func HandleConfig(w http.ResponseWriter, r *http.Request) {
