@@ -1,32 +1,47 @@
 package utils
 
 import (
+	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
-	"net/http"
-	"net/url"
 
 	"115nexus/internal/models"
 )
 
 // 日志缓存
 type LogBuffer struct {
-	Lines []string
-	Limit int
+	Lines       []string
+	Limit       int
+	mu          sync.RWMutex
+	subscribers []chan string
 }
 
 func (l *LogBuffer) Write(p []byte) (n int, err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	
 	line := string(p)
 	l.Lines = append(l.Lines, line)
 	if len(l.Lines) > l.Limit {
 		l.Lines = l.Lines[len(l.Lines)-l.Limit:]
 	}
+
+	for _, sub := range l.subscribers {
+		select {
+		case sub <- line:
+		default:
+		}
+	}
 	return len(p), nil
 }
 
 func (l *LogBuffer) GetLogs() string {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	var sb strings.Builder
 	for _, line := range l.Lines {
 		sb.WriteString(line)
@@ -34,24 +49,81 @@ func (l *LogBuffer) GetLogs() string {
 	return sb.String()
 }
 
-var GlobalLogBuffer = &LogBuffer{Limit: 500}
+func (l *LogBuffer) Subscribe() chan string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	ch := make(chan string, 100)
+	l.subscribers = append(l.subscribers, ch)
+	return ch
+}
 
-// 网络客户端
-func GetProxyClient(cfg models.BotConfig) *http.Client {
-	c := &http.Client{Timeout: 30 * time.Second}
-	if cfg.ProxyUrl != "" {
-		if u, err := url.Parse(cfg.ProxyUrl); err == nil {
-			c.Transport = &http.Transport{Proxy: http.ProxyURL(u)}
+func (l *LogBuffer) Unsubscribe(ch chan string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i, sub := range l.subscribers {
+		if sub == ch {
+			l.subscribers = append(l.subscribers[:i], l.subscribers[i+1:]...)
+			close(ch)
+			break
 		}
 	}
-	return c
 }
 
+var (
+	GlobalLogBuffer = &LogBuffer{Limit: 500}
+	
+	httpClient    *http.Client
+	proxyClient   *http.Client
+	currentProxy  string
+	clientMutex   sync.Mutex
+)
+
+// 获取直连客户端 (复用)
 func GetDirectClient() *http.Client {
-	return &http.Client{Timeout: 30 * time.Second}
+	clientMutex.Lock()
+	defer clientMutex.Unlock()
+	if httpClient == nil {
+		httpClient = &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				IdleConnTimeout:     90 * time.Second,
+				MaxIdleConnsPerHost: 20,
+			},
+		}
+	}
+	return httpClient
 }
 
-// 提取工具
+// 获取代理客户端 (支持动态配置更新)
+func GetProxyClient(cfg models.BotConfig) *http.Client {
+	clientMutex.Lock()
+	defer clientMutex.Unlock()
+
+	if proxyClient != nil && currentProxy == cfg.ProxyUrl {
+		return proxyClient
+	}
+
+	transport := &http.Transport{
+		MaxIdleConns:        100,
+		IdleConnTimeout:     90 * time.Second,
+		MaxIdleConnsPerHost: 20,
+	}
+
+	if cfg.ProxyUrl != "" {
+		if u, err := url.Parse(cfg.ProxyUrl); err == nil {
+			transport.Proxy = http.ProxyURL(u)
+		}
+	}
+
+	proxyClient = &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: transport,
+	}
+	currentProxy = cfg.ProxyUrl
+	return proxyClient
+}
+
 func Extract115Link(text string) string {
 	re := regexp.MustCompile(`(https?://(?:[a-zA-Z0-9-]+\.)?(?:115\.com|anxia\.com|115cdn\.com|115\.cn)/s/[a-zA-Z0-9]+(?:\?password=[a-zA-Z0-9]+)?)`)
 	matches := re.FindStringSubmatch(text)
@@ -61,7 +133,6 @@ func Extract115Link(text string) string {
 	return ""
 }
 
-// 解析
 func ParseSizeToMB(s string) float64 {
 	s = strings.ToUpper(strings.ReplaceAll(s, " ", ""))
 	re := regexp.MustCompile(`([\d\.]+)([KMGTP]?B?)`)

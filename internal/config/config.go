@@ -2,29 +2,53 @@ package config
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 
 	"115nexus/internal/logger"
 	"115nexus/internal/models"
 	"115nexus/internal/utils"
 )
 
-var ConfigPath = "config/bot_config.json"
+var (
+	ConfigPath = "config/bot_config.json"
+	configMu   sync.RWMutex
+)
 
 func Read() (models.BotConfig, error) {
+	configMu.RLock()
+	defer configMu.RUnlock()
+	
 	var cfg models.BotConfig
-	data, err := ioutil.ReadFile(ConfigPath)
-	if err != nil { return cfg, err }
+	if _, err := os.Stat(ConfigPath); os.IsNotExist(err) {
+		slog.Warn("⚠️ 配置文件不存在，返回默认值", "path", ConfigPath)
+		return cfg, nil
+	}
+
+	data, err := os.ReadFile(ConfigPath)
+	if err != nil {
+		return cfg, err
+	}
 	err = json.Unmarshal(data, &cfg)
 	return cfg, err
 }
 
 func Save(cfg models.BotConfig) {
-	data, _ := json.MarshalIndent(cfg, "", "  ")
-	_ = ioutil.WriteFile(ConfigPath, data, 0644)
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		slog.Error("❌ 序列化配置失败", "err", err)
+		return
+	}
+	
+	err = os.WriteFile(ConfigPath, data, 0644)
+	if err != nil {
+		slog.Error("❌ 写入配置文件失败", "err", err)
+	}
 }
 
 func InitLogging() {
@@ -37,7 +61,6 @@ func InitLogging() {
 	default:      lvl = slog.LevelInfo
 	}
 
-	// 核心：使用 HandlerOptions 来强制生效 Level
 	opts := &slog.HandlerOptions{Level: lvl}
 
 	h1 := logger.NewTwoLineHandler(os.Stdout, true, opts)

@@ -18,8 +18,8 @@ import (
 
 func Start(token string) {
 	if token == "" { return }
-	// 提升超时时间至 60s 以应对代理延迟
-	client := utils.GetProxyClient(models.GlobalConfig)
+	
+	client := utils.GetProxyClient(models.GetConfig())
 	client.Timeout = 60 * time.Second
 	
 	bot, err := tgbotapi.NewBotAPIWithClient(token, tgbotapi.APIEndpoint, client)
@@ -29,7 +29,7 @@ func Start(token string) {
 	slog.Info("🤖 Bot Online", "user", bot.Self.UserName)
 	
 	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60 // 长轮询超时设为 60s
+	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
 	for update := range updates {
 		if update.Message != nil { handleMsg(bot, update.Message) } else if update.CallbackQuery != nil { handleCB(bot, update.CallbackQuery) }
@@ -37,11 +37,16 @@ func Start(token string) {
 }
 
 func handleMsg(bot *tgbotapi.BotAPI, m *tgbotapi.Message) {
-	txt := strings.TrimSpace(m.Text); cfg := models.GlobalConfig
+	txt := strings.TrimSpace(m.Text)
+	cfg := models.GetConfig()
+	
 	if strings.HasPrefix(txt, "/start") || strings.HasPrefix(txt, "/help") {
-		msg := tgbotapi.NewMessage(m.Chat.ID, "👋 *欢迎使用 115Media\\-Bot v0\\.2\\.3*\n\n• `/s 关键词` \\- 搜索影视\n• `/ps 关键词` \\- Pansou 搜索\n\n💡 直接发送 115 链接或磁力链可一键推送。")
-		msg.ParseMode = "MarkdownV2"; bot.Send(msg); return
+		msg := tgbotapi.NewMessage(m.Chat.ID, "👋 *欢迎使用 115Nexus*\n\n• `/s 关键词` \\- 搜索影视\n• `/ps 关键词` \\- Pansou 搜索\n\n💡 直接发送 115 链接或磁力链可一键推送。")
+		msg.ParseMode = "MarkdownV2"
+		bot.Send(msg)
+		return
 	}
+	
 	if strings.HasPrefix(txt, "/ps") {
 		kw := strings.TrimSpace(strings.TrimPrefix(txt, "/ps"))
 		if kw != "" { doPansouSearch(bot, m.Chat.ID, kw) }
@@ -50,35 +55,37 @@ func handleMsg(bot *tgbotapi.BotAPI, m *tgbotapi.Message) {
 		if kw != "" { doSearch(bot, m.Chat.ID, kw) }
 	} else if l := utils.Extract115Link(txt); l != "" {
 		bot.Send(tgbotapi.NewMessage(m.Chat.ID, services.PushToMedia302(l, cfg)))
+	} else if strings.HasPrefix(txt, "magnet:?") {
+		bot.Send(tgbotapi.NewMessage(m.Chat.ID, services.PushMagnetToOffline(txt, cfg)))
 	}
 }
 
 func doSearch(bot *tgbotapi.BotAPI, cid int64, kw string) {
-	cfg := models.GlobalConfig
+	cfg := models.GetConfig()
 	var res []models.MovieMetadata
 	tUrl := fmt.Sprintf("https://api.themoviedb.org/3/search/multi?api_key=%s&language=zh-CN&query=%s", cfg.TmdbApiKey, url.QueryEscape(kw))
-	slog.Info("🔍 TMDB Request URL", "url", tUrl)
+	
 	resp, err := utils.GetProxyClient(cfg).Get(tUrl)
 	if err == nil {
 		defer resp.Body.Close()
 		var w models.TmdbSearchResponse; json.NewDecoder(resp.Body).Decode(&w); res = w.Results
 	} else {
 		slog.Error("❌ TMDB Search Error", "err", err)
-		bot.Send(tgbotapi.NewMessage(cid, "❌ 搜索请求失败，请检查网络或代理"))
+		bot.Send(tgbotapi.NewMessage(cid, "❌ 搜索请求失败，请检查配置"))
 		return
 	}
-	if len(res) == 0 { bot.Send(tgbotapi.NewMessage(cid, "❌ No results")); return }
+	
+	if len(res) == 0 { bot.Send(tgbotapi.NewMessage(cid, "❌ 无结果")); return }
 	sid := fmt.Sprintf("s_%d", time.Now().UnixNano())
 	models.SearchCache.Store(sid, models.SearchSession{Keyword: kw, Items: res, Time: time.Now()})
 	sendSearchPage(bot, cid, sid, 1, false, 0)
 }
 
 func doPansouSearch(bot *tgbotapi.BotAPI, cid int64, kw string) {
-	cfg := models.GlobalConfig
+	cfg := models.GetConfig()
 	items, err := services.DoPansouSearch(kw, cfg)
 	if err != nil {
-		slog.Error("❌ Pansou Search Error", "err", err)
-		bot.Send(tgbotapi.NewMessage(cid, "❌ Pansou 搜索失败，请检查配置"))
+		bot.Send(tgbotapi.NewMessage(cid, "❌ Pansou 搜索失败: " + err.Error()))
 		return
 	}
 	if len(items) == 0 {
@@ -152,7 +159,10 @@ func sendSearchPage(bot *tgbotapi.BotAPI, cid int64, sid string, page int, edit 
 }
 
 func handleCB(bot *tgbotapi.BotAPI, q *tgbotapi.CallbackQuery) {
-	cid := q.Message.Chat.ID; data := q.Data; cfg := models.GlobalConfig
+	cid := q.Message.Chat.ID
+	data := q.Data
+	cfg := models.GetConfig()
+	
 	if strings.HasPrefix(data, "f|") {
 		p := strings.Split(data, "|"); bot.Request(tgbotapi.NewCallback(q.ID, "Fetching..."))
 		res, _ := services.FetchHdhiveResources(p[1], p[2], cfg)
@@ -161,7 +171,8 @@ func handleCB(bot *tgbotapi.BotAPI, q *tgbotapi.CallbackQuery) {
 		models.ResourceCache.Store(rsid, models.ResourceSession{Title: res[0].Title, Items: res, Time: time.Now()})
 		sendResPage(bot, cid, rsid, 1, true, q.Message.MessageID, p[3])
 	} else if strings.HasPrefix(data, "p|") {
-		p := strings.Split(data, "|"); bot.Send(tgbotapi.NewMessage(cid, services.PushToMedia302(p[1], cfg)))
+		p := strings.Split(data, "|")
+		bot.Send(tgbotapi.NewMessage(cid, services.PushToMedia302(p[1], cfg)))
 	} else if strings.HasPrefix(data, "pp|") {
 		p := strings.Split(data, "|")
 		if len(p) >= 3 {
@@ -186,7 +197,7 @@ func handleCB(bot *tgbotapi.BotAPI, q *tgbotapi.CallbackQuery) {
 func sendResPage(bot *tgbotapi.BotAPI, cid int64, rsid string, page int, edit bool, mid int, ssid string) {
 	v, ok := models.ResourceCache.Load(rsid); if !ok { return }
 	sess := v.(models.ResourceSession)
-	ps := 5 // 每页显示5条，因为文本变长了
+	ps := 5
 	start := (page-1)*ps
 	end := start+ps
 	if end > len(sess.Items) { end = len(sess.Items) }
@@ -200,11 +211,8 @@ func sendResPage(bot *tgbotapi.BotAPI, cid int64, rsid string, page int, edit bo
 	for i := start; i < end; i++ {
 		item := sess.Items[i]
 		idx := i - start + 1
-		
-		// 拼接正文
 		txtBuilder.WriteString(fmt.Sprintf("*%d\\.* %s\n\n", idx, utils.TgEscape(item.Display)))
 		
-		// 拼接按钮
 		btnLabel := fmt.Sprintf("📥 存 %d", idx)
 		if item.HdhivePoints > 0 { 
 			btnLabel = fmt.Sprintf("💎 %dpt | 存 %d", item.HdhivePoints, idx) 

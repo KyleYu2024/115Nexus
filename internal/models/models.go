@@ -155,13 +155,39 @@ type BatchOfflineRequest struct {
 	Folder string `json:"folder"`
 }
 
+type APIResponse struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+type PushTask struct {
+	ID      string
+	Link    string
+	Config  BotConfig
+	Retries int
+}
+
 var (
 	CurrentBot    *tgbotapi.BotAPI
-	GlobalConfig  BotConfig
-	ConfigMutex   sync.RWMutex
+	globalConfig  BotConfig
+	configMutex   sync.RWMutex
 	SearchCache   sync.Map
 	ResourceCache sync.Map
 	PansouCache   sync.Map
 	WebUser       string
 	WebPassword   string
+	PushTaskQueue = make(chan PushTask, 100)
 )
+
+func GetConfig() BotConfig {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return globalConfig
+}
+
+func UpdateConfig(cfg BotConfig) {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+	globalConfig = cfg
+}
