@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"115nexus/internal/models"
@@ -16,16 +17,44 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func Start(token string) {
-	if token == "" { return }
-	
+var botMu sync.Mutex
+
+func StartOrReload(token string) {
+	if token == "" {
+		botMu.Lock()
+		if models.CurrentBot != nil {
+			models.CurrentBot.StopReceivingUpdates()
+			models.CurrentBot = nil
+			slog.Info("🛑 TG Bot 已停止 (Token 为空)")
+		}
+		botMu.Unlock()
+		return
+	}
+
+	botMu.Lock()
+	if models.CurrentBot != nil && models.CurrentBot.Token == token {
+		botMu.Unlock()
+		return
+	}
+	if models.CurrentBot != nil {
+		slog.Info("🔄 旧 Bot 正在停止以重启...")
+		models.CurrentBot.StopReceivingUpdates()
+		time.Sleep(1 * time.Second)
+	}
+
 	client := utils.GetProxyClient(models.GetConfig())
 	client.Timeout = 60 * time.Second
 	
 	bot, err := tgbotapi.NewBotAPIWithClient(token, tgbotapi.APIEndpoint, client)
-	if err != nil { slog.Error("❌ TG Bot 启动失败", "err", err); return }
+	if err != nil { 
+		slog.Error("❌ TG Bot 启动失败", "err", err)
+		botMu.Unlock()
+		return 
+	}
 	
 	models.CurrentBot = bot
+	botMu.Unlock()
+	
 	slog.Info("🤖 Bot Online", "user", bot.Self.UserName)
 	
 	u := tgbotapi.NewUpdate(0)
@@ -34,6 +63,7 @@ func Start(token string) {
 	for update := range updates {
 		if update.Message != nil { handleMsg(bot, update.Message) } else if update.CallbackQuery != nil { handleCB(bot, update.CallbackQuery) }
 	}
+	slog.Info("💤 Bot 更新循环已结束")
 }
 
 func handleMsg(bot *tgbotapi.BotAPI, m *tgbotapi.Message) {

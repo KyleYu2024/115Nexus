@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
@@ -76,7 +76,7 @@ func DoHdhiveCheckin(cfg models.BotConfig) (string, error) {
 				resp2, errC := client.Do(r3)
 				if errC == nil {
 					defer resp2.Body.Close()
-					body, _ := ioutil.ReadAll(resp2.Body)
+					body, _ := io.ReadAll(resp2.Body)
 					txt := string(body)
 					msg := "签到请求已执行"
 					reDesc := regexp.MustCompile(`"description":"([^"]+)"`)
@@ -97,7 +97,7 @@ func DoHdhiveCheckin(cfg models.BotConfig) (string, error) {
 			var w models.HdhiveApiResponse
 			json.NewDecoder(resp.Body).Decode(&w)
 			finalMsg = w.Message
-			if !w.Success { finalErr = fmt.Errorf(w.Message) }
+			if !w.Success { finalErr = fmt.Errorf("%s", w.Message) }
 			slog.Info("✅ API 签到反馈", "msg", finalMsg, "cost", time.Since(start).String())
 		} else { finalErr = errA }
 	}
@@ -145,7 +145,13 @@ func FetchHdhiveResources(id string, mType string, cfg models.BotConfig) ([]mode
 		totalMB := utils.ParseSizeToMB(hr.ShareSize)
 		count := utils.EstimateEpisodeCount(hr.Title)
 		avgMB := totalMB / float64(count)
-		tags := utils.UniqueTags(append(hr.VideoResolution, hr.Source...))
+		allTags := append([]string{}, hr.VideoResolution...)
+		allTags = append(allTags, hr.Source...)
+		allTags = append(allTags, hr.SubtitleLanguage...)
+		allTags = append(allTags, hr.SubtitleType...)
+		allTags = append(allTags, hr.DiskTypes...)
+		allTags = append(allTags, hr.CloudTypes...)
+		tags := utils.UniqueTags(allTags)
 		
 		officialTag := ""
 		if hr.IsOfficial { officialTag = "[官组] " }
@@ -178,7 +184,7 @@ func GetHdhiveMe(cfg models.BotConfig) (*models.HdhiveMeData, error) {
 	defer resp.Body.Close()
 	var w models.HdhiveApiResponse
 	json.NewDecoder(resp.Body).Decode(&w)
-	if !w.Success { return nil, fmt.Errorf(w.Message) }
+	if !w.Success { return nil, fmt.Errorf("%s", w.Message) }
 	var d models.HdhiveMeData
 	json.Unmarshal(w.Data, &d)
 	return &d, nil
@@ -311,7 +317,7 @@ func processPushToMedia302(link string, cfg models.BotConfig) string {
 	if err != nil { return "❌ 请求异常: " + err.Error() }
 	defer resp.Body.Close()
 	
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	bodyStr := string(body)
 	if resp.StatusCode == 200 { 
 		if strings.Contains(bodyStr, "false") || strings.Contains(bodyStr, "error") {
@@ -333,7 +339,7 @@ func processPushMagnet(magnet string, cfg models.BotConfig) string {
 	if err != nil { return "❌ 请求异常: " + err.Error() }
 	defer resp.Body.Close()
 	
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	bodyStr := string(body)
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 { 
 		return "✅ 磁力已添加" 

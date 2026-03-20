@@ -2,8 +2,13 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="115Nexus">
+    <meta name="theme-color" content="#030617">
+    <meta name="color-scheme" content="dark">
     <title>115Nexus</title>
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="/manifest.json?v={{.Version}}">
     <link rel="icon" href="https://img.andp.cc/icons/upload/115Nexus.png">
     <link rel="apple-touch-icon" href="https://img.andp.cc/icons/upload/115Nexus.png">
     <link rel="stylesheet" href="/static/style.css?v={{.Version}}">
@@ -20,10 +25,10 @@
     <div class="navbar">
         <div class="brand" onclick="location.reload()">{{.Logo}} 115Nexus</div>
         <div class="nav-links">
+            <div class="nav-active-pill" id="navPill"></div>
             <div class="nav-item active" onclick="switchTab('search')">搜索</div>
             <div class="nav-item" onclick="switchTab('logs')">日志</div>
             <div class="nav-item" onclick="switchTab('settings')">设置</div>
-            <div class="nav-item" onclick="toggleTheme()" id="themeIcon">🌞</div>
         </div>
     </div>
 

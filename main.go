@@ -20,7 +20,7 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-const AppVersion = "0.3.0"
+const AppVersion = "0.4.19"
 
 var globalCron *cron.Cron
 
@@ -38,8 +38,10 @@ func main() {
 	models.WebUser = os.Getenv("WEB_USER")
 	models.WebPassword = os.Getenv("WEB_PASSWORD")
 
+	go models.StartCacheCleaner()
+
 	if cfg.TgToken != "" {
-		go bot.Start(cfg.TgToken)
+		go bot.StartOrReload(cfg.TgToken)
 	}
 
 	// 启动异步推送 Worker (透传 ctx)
@@ -50,8 +52,9 @@ func main() {
 
 	// 注册配置更新回调
 	web.OnConfigSave = func() {
-		slog.Info("🔄 检测到配置更新，正在重新调度 Cron 任务...")
+		slog.Info("🔄 检测到配置更新，正在重新应用配置...")
 		UpdateCron()
+		go bot.StartOrReload(models.GetConfig().TgToken)
 	}
 
 	mux := http.NewServeMux()

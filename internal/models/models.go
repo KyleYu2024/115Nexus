@@ -191,3 +191,25 @@ func UpdateConfig(cfg BotConfig) {
 	defer configMutex.Unlock()
 	globalConfig = cfg
 }
+
+func StartCacheCleaner() {
+	ticker := time.NewTicker(30 * time.Minute)
+	go func() {
+		for range ticker.C {
+			now := time.Now()
+			SearchCache.Range(func(k, v any) bool {
+				if now.Sub(v.(SearchSession).Time) > 2*time.Hour { SearchCache.Delete(k) }
+				return true
+			})
+			ResourceCache.Range(func(k, v any) bool {
+				if now.Sub(v.(ResourceSession).Time) > 2*time.Hour { ResourceCache.Delete(k) }
+				return true
+			})
+			PansouCache.Range(func(k, v any) bool {
+				if now.Sub(v.(PansouSession).Time) > 2*time.Hour { PansouCache.Delete(k) }
+				return true
+			})
+		}
+	}()
+}
+

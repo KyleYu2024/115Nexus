@@ -7,10 +7,31 @@ function switchTab(t){
     if (targetTab) targetTab.classList.add('active'); 
     
     const navItem = document.querySelector(`[onclick*="switchTab('${t}')"]`);
-    if (navItem) navItem.classList.add('active');
+    if (navItem) {
+        navItem.classList.add('active');
+        updateNavPill(navItem);
+    }
 
     if(t==='settings') loadConfig(); 
     if(t==='logs') fetchLogs(); 
+}
+
+function updateNavPill(target) {
+    const pill = document.getElementById('navPill');
+    if (!pill || !target) return;
+    
+    // 液态拉伸效果：移动时增加拉伸类
+    pill.classList.add('stretching');
+    
+    const rect = target.getBoundingClientRect();
+    const parentRect = target.parentElement.getBoundingClientRect();
+    
+    pill.style.width = rect.width + 'px';
+    pill.style.left = (rect.left - parentRect.left) + 'px';
+    
+    setTimeout(() => {
+        pill.classList.remove('stretching');
+    }, 400);
 }
 
 async function loadConfig(){ 
@@ -299,12 +320,6 @@ function renderLogBlocks(text, isFull) {
     setTimeout(() => { el.scrollTop = el.scrollHeight; }, 50);
 }
 
-function toggleTheme(){
-    const isDark = document.documentElement.classList.toggle('dark');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    document.getElementById('themeIcon').innerText = isDark ? '🌙' : '🌞';
-}
-
 function showToast(m){
     const t = document.getElementById('toast');
     if(!t) return;
@@ -317,12 +332,13 @@ function closeModal(){
     document.getElementById('resModal').style.display='none';
 }
 
-// 自动初始化
 (function(){
-    const savedTheme = localStorage.getItem('theme');
-    if(savedTheme === 'dark'){
-        document.documentElement.classList.add('dark');
-        document.getElementById('themeIcon').innerText = '🌙';
-    }
+    document.documentElement.classList.add('dark');
     loadConfig();
+    
+    // 初始化药丸位置
+    setTimeout(() => {
+        const active = document.querySelector('.nav-item.active');
+        if(active) updateNavPill(active);
+    }, 100);
 })();

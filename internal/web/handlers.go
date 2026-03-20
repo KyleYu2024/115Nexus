@@ -1,12 +1,14 @@
 package web
 
 import (
+	"crypto/hmac"
 	"crypto/md5"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
-	"io/ioutil"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -22,7 +24,15 @@ import (
 var OnConfigSave func()
 
 // 这里通过全局变量或函数获取版本号
-var CurrentVersion = "0.3.0"
+var CurrentVersion = "0.4.19"
+
+var sessionSecretKey string
+
+func init() {
+	b := make([]byte, 16)
+	rand.Read(b)
+	sessionSecretKey = hex.EncodeToString(b)
+}
 
 func sendJSON(w http.ResponseWriter, status int, resp models.APIResponse) {
 	w.Header().Set("Content-Type", "application/json")
@@ -85,8 +95,8 @@ func HandleManifest(w http.ResponseWriter, r *http.Request) {
 		"short_name": "115Nexus",
 		"start_url": "/",
 		"display": "standalone",
-		"background_color": "#ffffff",
-		"theme_color": "#007aff",
+		"background_color": "#030617",
+		"theme_color": "#030617",
 		"icons": [
 			{
 				"src": "https://img.andp.cc/icons/upload/115Nexus.png",
@@ -106,7 +116,7 @@ func HandleConfig(w http.ResponseWriter, r *http.Request) {
 		sendJSON(w, http.StatusOK, models.APIResponse{Success: true, Data: cfg})
 	} else if r.Method == "POST" {
 		var n models.BotConfig
-		body, err := ioutil.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			sendJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Message: "读取请求失败"})
 			return
@@ -247,8 +257,9 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func getSessionToken() string {
-	data := []byte(models.WebUser + ":" + models.WebPassword + "@salt")
-	return fmt.Sprintf("%x", md5.Sum(data))
+	mac := hmac.New(md5.New, []byte(sessionSecretKey))
+	mac.Write([]byte(models.WebUser + ":" + models.WebPassword))
+	return fmt.Sprintf("%x", mac.Sum(nil))
 }
 
 func HandleLogin(w http.ResponseWriter, r *http.Request) {

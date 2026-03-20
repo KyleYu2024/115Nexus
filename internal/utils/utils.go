@@ -104,6 +104,12 @@ func GetProxyClient(cfg models.BotConfig) *http.Client {
 		return proxyClient
 	}
 
+	if proxyClient != nil && proxyClient.Transport != nil {
+		if t, ok := proxyClient.Transport.(*http.Transport); ok {
+			t.CloseIdleConnections()
+		}
+	}
+
 	transport := &http.Transport{
 		MaxIdleConns:        100,
 		IdleConnTimeout:     90 * time.Second,
