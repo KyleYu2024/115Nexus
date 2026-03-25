@@ -47,6 +47,8 @@ type MovieMetadata struct {
 	ReleaseDate  string      `json:"release_date"`
 	FirstAirDate string      `json:"first_air_date"`
 	MediaType    string      `json:"media_type"`
+	PosterPath   string      `json:"poster_path"`
+	Overview     string      `json:"overview"`
 }
 
 type TmdbSearchResponse struct {

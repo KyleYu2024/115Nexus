@@ -161,13 +161,16 @@ async function doSearch(){
                             </div>
                         </div>`;
             }
-            let year=(item.release_date||item.first_air_date||'').substring(0,4);
             const title = item.title || item.name;
-            return `<div class="list-item" onclick="openResources('${encodeURIComponent(item.id)}','${item.media_type||'tv'}','${encodeURIComponent(title)}')">
-                        <b>${title}</b>
-                        <div class="list-meta">
-                            <span class="badge">${item.media_type==='movie'?'电影':'剧集'}</span>
-                            <span>${year}</span>
+            const year = (item.release_date || item.first_air_date || '').substring(0, 4);
+            return `<div class="list-item search-result-item" onclick="openResources('${encodeURIComponent(item.id)}','${item.media_type||'tv'}','${encodeURIComponent(title)}')">
+                        ${item.poster_path ? `<img class="search-item-poster" src="https://image.tmdb.org/t/p/w200${item.poster_path}">` : '<div class="search-item-poster no-poster">🎬</div>'}
+                        <div class="search-item-info">
+                            <b class="list-title">${title}</b>
+                            <div class="list-meta">
+                                <span class="badge">${item.media_type==='movie'?'电影':'剧集'}</span>
+                                <span>${year}</span>
+                            </div>
                         </div>
                     </div>`;
         }).join('');
@@ -176,13 +179,44 @@ async function doSearch(){
     }
 }
 
+function showSelectionModal(items, q) {
+    const modal = document.getElementById('resModal');
+    const listEl = document.getElementById('resList');
+    const detailEl = document.getElementById('movieDetail');
+    document.getElementById('resTitle').innerText = `搜索: ${q}`;
+    
+    detailEl.style.display = 'none';
+    modal.style.display = 'flex';
+    
+    listEl.innerHTML = `
+        <div style="padding:15px 24px; font-size:14px; color:var(--text-sub); border-bottom:1px solid var(--border);">请选择正确的影视项目：</div>
+        ${items.map(item => {
+            const title = item.title || item.name;
+            const year = (item.release_date || item.first_air_date || '').substring(0, 4);
+            return `<div class="res-item search-result-item" onclick="openResources('${encodeURIComponent(item.id)}','${item.media_type||'tv'}','${encodeURIComponent(title)}', true)">
+                        ${item.poster_path ? `<img class="search-item-poster" src="https://image.tmdb.org/t/p/w200${item.poster_path}">` : '<div class="search-item-poster no-poster">🎬</div>'}
+                        <div class="search-item-info">
+                            <b class="list-title">${title}</b>
+                            <div class="list-meta">
+                                <span class="badge">${item.media_type==='movie'?'电影':'剧集'}</span>
+                                <span>${year}</span>
+                            </div>
+                        </div>
+                    </div>`;
+        }).join('')}
+    `;
+}
+
 async function openResources(id,type,title){
     const modal = document.getElementById('resModal');
     const listEl = document.getElementById('resList');
+    const detailEl = document.getElementById('movieDetail');
+    
     document.getElementById('resTitle').innerText = decodeURIComponent(title);
     
     modal.style.display='flex';
     listEl.innerHTML='<div style="text-align:center;padding:30px;">⏳ 正在获取资源...</div>';
+    detailEl.style.display='none';
     
     try{
         const r = await fetch(`/api/resources?id=${id}&type=${type}`);
@@ -209,11 +243,51 @@ async function openResources(id,type,title){
                             <div class="res-title">${item.display}</div>
                             <button class="btn btn-sm ${btnClass}" onclick="pushResource(this,'${item.link}',${item.hdhive_points})">${btnText}</button>
                         </div>
-                        <div style="margin-top:5px;">${tags}</div>
+                        <div class="res-line">
+                            <div style="flex:1;">${tags}</div>
+                            <button class="btn btn-sm btn-link" onclick="getLink(this, '${item.link}')">🔗 获取分享链</button>
+                        </div>
                     </div>`;
         }).join('');
     }catch(e){
         listEl.innerHTML='<div style="text-align:center;padding:30px;">❌ 请求失败</div>';
+    }
+}
+
+async function getLink(b, l) {
+    let oldText = b.innerText;
+    b.innerText = '获取中...';
+    b.disabled = true;
+    try {
+        const r = await fetch('/api/get-link', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({link: l})
+        });
+        const res = await r.json();
+        if(res.success) {
+            b.innerText = '📋 点击复制';
+            b.disabled = false;
+            b.onclick = () => {
+                const el = document.createElement('textarea');
+                el.value = res.data.link;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                showToast('已复制到剪贴板');
+                b.innerText = '✅ 已复制';
+                setTimeout(() => { b.innerText = '📋 点击复制'; }, 2000);
+            };
+        } else {
+            showToast(res.message);
+            b.innerText = oldText;
+            b.disabled = false;
+        }
+    } catch(e) {
+        showToast('请求失败');
+        b.innerText = oldText;
+        b.disabled = false;
     }
 }
 

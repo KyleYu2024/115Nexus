@@ -20,7 +20,7 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-const AppVersion = "0.4.19"
+const AppVersion = "0.4.20"
 
 var globalCron *cron.Cron
 
@@ -83,6 +83,7 @@ func main() {
 	}))
 	mux.HandleFunc("/api/search", web.AuthMiddleware(web.HandleSearch))
 	mux.HandleFunc("/api/resources", web.AuthMiddleware(web.HandleResources))
+	mux.HandleFunc("/api/get-link", web.AuthMiddleware(web.HandleGetLink))
 	mux.HandleFunc("/api/push", web.AuthMiddleware(web.HandlePush))
 
 	port := os.Getenv("PORT")

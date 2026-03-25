@@ -24,7 +24,7 @@ import (
 var OnConfigSave func()
 
 // 这里通过全局变量或函数获取版本号
-var CurrentVersion = "0.4.19"
+var CurrentVersion = "0.4.20"
 
 var sessionSecretKey string
 
@@ -223,7 +223,42 @@ func HandleResources(w http.ResponseWriter, r *http.Request) {
 		sendJSON(w, http.StatusOK, models.APIResponse{Success: false, Message: "资源获取失败: " + err.Error()})
 		return
 	}
-	sendJSON(w, http.StatusOK, models.APIResponse{Success: true, Data: map[string]interface{}{"items": items}})
+
+	// 额外获取 TMDB 详情以便在前端展示详情
+	var meta models.MovieMetadata
+	if cfg.TmdbApiKey != "" {
+		target := fmt.Sprintf("https://api.themoviedb.org/3/%s/%s?api_key=%s&language=zh-CN", mType, id, cfg.TmdbApiKey)
+		resp, err := utils.GetProxyClient(cfg).Get(target)
+		if err == nil {
+			defer resp.Body.Close()
+			json.NewDecoder(resp.Body).Decode(&meta)
+		}
+	}
+
+	sendJSON(w, http.StatusOK, models.APIResponse{Success: true, Data: map[string]interface{}{"items": items, "meta": meta}})
+}
+
+func HandleGetLink(w http.ResponseWriter, r *http.Request) {
+	var req struct { Link string `json:"link"` }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Message: "非法请求格式"})
+		return
+	}
+	
+	cfg := models.GetConfig()
+	var final string
+	var err error
+	if strings.HasPrefix(req.Link, "hdhive://") {
+		final, err = services.UnlockHdhive(strings.TrimPrefix(req.Link, "hdhive://"), cfg)
+		if err != nil {
+			sendJSON(w, http.StatusOK, models.APIResponse{Success: false, Message: "解锁失败: " + err.Error()})
+			return
+		}
+	} else {
+		final = req.Link
+	}
+	
+	sendJSON(w, http.StatusOK, models.APIResponse{Success: true, Data: map[string]interface{}{"link": final}})
 }
 
 func HandlePush(w http.ResponseWriter, r *http.Request) {
