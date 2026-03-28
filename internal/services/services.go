@@ -60,7 +60,7 @@ func DoHdhiveCheckin(cfg models.BotConfig) (string, error) {
 			r2.Header.Set("User-Agent", ua)
 			r2.Header.Set("Accept", "text/x-component")
 			r2.Header.Set("Content-Type", "text/plain;charset=UTF-8")
-			r2.Header.Set("Next-Action", "601d84138632d39f16adfce544ceb527a6f6243670")
+			r2.Header.Set("Next-Action", "603b753f736d128b24c8b4f894057aa301eda77339")
 			
 			resp, errL := client.Do(r2)
 			if errL == nil && (resp.StatusCode == 200 || resp.StatusCode == 303) {
@@ -71,7 +71,7 @@ func DoHdhiveCheckin(cfg models.BotConfig) (string, error) {
 				r3.Header.Set("User-Agent", ua)
 				r3.Header.Set("Accept", "text/x-component")
 				r3.Header.Set("Content-Type", "text/plain;charset=UTF-8")
-				r3.Header.Set("Next-Action", "409539c7faa0ad25d3e3e8c21465c10661896ca5a2")
+				r3.Header.Set("Next-Action", "40efbc107064215e9eff178b0466274739ba7d9cb4")
 				
 				resp2, errC := client.Do(r3)
 				if errC == nil {

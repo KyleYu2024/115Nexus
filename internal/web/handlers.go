@@ -24,7 +24,7 @@ import (
 var OnConfigSave func()
 
 // 这里通过全局变量或函数获取版本号
-var CurrentVersion = "0.4.20"
+var CurrentVersion = "0.4.21"
 
 var sessionSecretKey string
 
